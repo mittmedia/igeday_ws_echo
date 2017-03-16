@@ -7,8 +7,9 @@ var server = http.createServer(function(request, response) {
     response.writeHead(404);
     response.end();
 });
-server.listen(8080, function() {
-    console.log((new Date()) + ' Server is listening on port 8080');
+var port = (process.env.PORT || 5000);
+server.listen(port, function() {
+    console.log((new Date()) + ' Server is listening on port ' + port);
 });
 
 wsServer = new WebSocketServer({
@@ -18,7 +19,7 @@ wsServer = new WebSocketServer({
     // facilities built into the protocol and the browser.  You should
     // *always* verify the connection's origin and decide whether or not
     // to accept it.
-    autoAcceptConnections: false
+    autoAcceptConnections: true
 });
 
 function originIsAllowed(origin) {
