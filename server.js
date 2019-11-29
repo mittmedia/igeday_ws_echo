@@ -1,53 +1,35 @@
 #!/usr/bin/env node
-var WebSocketServer = require('websocket').server;
-var http = require('http');
+const http = require('http');
+const WebSocket = require('ws');
 
-var server = http.createServer(function(request, response) {
-    console.log((new Date()) + ' Received request for ' + request.url);
-    response.writeHead(404);
-    response.end();
-});
+const server = http.createServer();
+const wsServer = new WebSocket.Server({ noServer: true });
 var port = (process.env.PORT || 5000);
-server.listen(port, function() {
-    console.log((new Date()) + ' Server is listening on port ' + port);
-});
 
-wsServer = new WebSocketServer({
-    httpServer: server,
-    // You should not use autoAcceptConnections for production
-    // applications, as it defeats all standard cross-origin protection
-    // facilities built into the protocol and the browser.  You should
-    // *always* verify the connection's origin and decide whether or not
-    // to accept it.
-    autoAcceptConnections: true
-});
-
-function originIsAllowed(origin) {
-  // put logic here to detect whether the specified origin is allowed.
-  return true;
-}
-
-wsServer.on('request', function(request) {
-    if (!originIsAllowed(request.origin)) {
-      // Make sure we only accept requests from an allowed origin
-      request.reject();
-      console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
-      return;
+function broadcast(wsServer, ws, message) {
+  wsServer.clients.forEach(function each(client) {
+    if (client !== ws && client.readyState === WebSocket.OPEN) {
+      client.send(message);
     }
-
-    var connection = request.accept('echo-protocol', request.origin);
-    console.log((new Date()) + ' Connection accepted.');
-    connection.on('message', function(message) {
-        if (message.type === 'utf8') {
-            console.log('Received Message: ' + message.utf8Data);
-            connection.sendUTF(message.utf8Data);
-        }
-        else if (message.type === 'binary') {
-            console.log('Received Binary Message of ' + message.binaryData.length + ' bytes');
-            connection.sendBytes(message.binaryData);
-        }
-    });
-    connection.on('close', function(reasonCode, description) {
-        console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
-    });
+  });
+}
+wsServer.on('connection', (ws, req) => {
+  var ip = req.connection.remoteAddress;
+  broadcast(wsServer, ws, '{ "type": "connected", "payload": { "ip": "' + ip +'"}}')
+  ws.on('message', (message) => {
+    broadcast(wsServer, ws, message);
+	});
+  ws.on('close', () => {
+    console.log((new Date()) + ' Peer on ip ' + ip + ' disconnected!');
+    broadcast(wsServer, ws, '{ "type": "disconnected", "payload": { "ip": "' + ip +'"}}')
+  });
 });
+
+server.on('upgrade', function upgrade(request, socket, head) {
+  wsServer.handleUpgrade(request, socket, head, function done(ws) {
+    wsServer.emit('connection', ws, request);
+  });
+});
+
+console.log((new Date()) + ' Server is listening on port ' + port);
+server.listen(port);
